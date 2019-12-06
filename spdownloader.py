@@ -61,9 +61,3 @@ for episode_page in episodes:
     download_count += 1
 
 print(f'All episode downloaded (final number : {download_count}).')
-# TODO:
-# request on every link
-# store them
-# request download video
-
-# urllib.request.urlretrieve(url, file_name)
