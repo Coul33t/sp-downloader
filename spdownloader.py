@@ -2,8 +2,8 @@
 import requests
 # Finding the desired informations
 from bs4 import BeautifulSoup as BS
-# Download
-import urllib.request
+# Listing already downloaded
+import os
 # Progress bar
 from clint.textui import progress
 
@@ -29,35 +29,51 @@ print(f'Total number of link retrieved: {len(episodes)}.')
 
 print(f'Downloading episodes...')
 download_count = 0
-for episode_page in episodes:
-    print(f'Querying page {episode_page}...', end=' ')
-    page = requests.get(episode_page)
-    print(f'Page was returned.')
 
-    soup = BS(page.content, 'html.parser')
-    video_div = soup.find('div', {'data-item': True})
+already_downloaded = [x.split('.')[0] for x in os.listdir('.') if '.mp4' in x]
+downloading = False
+try:
+    for episode_page in episodes:
+        print(f'Querying page {episode_page}...', end=' ')
+        page = requests.get(episode_page)
+        print(f'Page was returned.')
 
-    if not video_div:
-        print('No video in this page.')
-        continue
+        soup = BS(page.content, 'html.parser')
+        video_div = soup.find('div', {'data-item': True})
 
-    video_url = video_div['data-item'].split('"')
-    video_url = next((s for s in video_url if 'mp4' in s), None)
-    video_url = video_url.replace('\\', '')
+        if not video_div:
+            print('No video in this page.')
+            continue
 
-    name = soup.find('div', class_='entry-content').find('h2').text
+        video_url = video_div['data-item'].split('"')
+        video_url = next((s for s in video_url if 'mp4' in s), None)
+        video_url = video_url.replace('\\', '')
 
-    print(f'Downloading {name}...')
-    stream = requests.get(video_url, stream=True)
-    total_length = int(stream.headers.get('content-length'))
-    with open(name + '.mp4', 'wb') as output_file:
-        for chunk in progress.bar(stream.iter_content(chunk_size=1024), expected_size=(1 + total_length / 1024)):
-            if chunk:
-                output_file.write(chunk)
-                output_file.flush()
+        name = soup.find('div', class_='entry-content').find('h2').text
 
+        if name in already_downloaded:
+            print(f'{name} has already been downloaded.')
+            continue
+
+        print(f'Downloading {name}...')
+        stream = requests.get(video_url, stream=True)
+        total_length = int(stream.headers.get('content-length'))
+        with open(name + '.mp4', 'wb') as output_file:
+            downloading = True
+            for chunk in progress.bar(stream.iter_content(chunk_size=1024), expected_size=(1 + total_length / 1024)):
+                if chunk:
+                    output_file.write(chunk)
+                    output_file.flush()
+
+        stream.close()
+        downloading = False
+        download_count += 1
+
+except KeyboardInterrupt:
     stream.close()
+    output_file.close()
+    if downloading and os.path.exists(name + '.mp4'):
+        os.remove(name + '.mp4')
+        print(f"Removed {name + '.mp4'} (interrupted download).")
 
-    download_count += 1
-
-print(f'All episode downloaded (final number : {download_count}).')
+print(f'Number of episode fully downloaded: {download_count}.')
