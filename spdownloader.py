@@ -34,6 +34,18 @@ def get_all_links(soup):
 
     return episodes
 
+def retrieve_already_downloaded():
+    already_downloaded = {}
+
+    try:
+        with open('already_downloaded.json', 'r') as dl_file:
+            already_downloaded = json.load(dl_file)
+            print(f'Found a list of already downloaded episodes ({len(already_downloaded.keys())}).')
+    except FileNotFoundError:
+        print('No list of already downloaded episodes found.')
+
+    return already_downloaded
+
 def get_videos():
     url = 'https://www.south-park-tv.biz/'
     print(f'Querying url {url}...', end=' ')
@@ -56,6 +68,8 @@ def get_videos():
         print('No list of already downloaded episodes found.')
 
     downloading = False
+
+    already_downloaded = retrieve_already_downloaded()
 
     try:
         for episode_page in episodes:
