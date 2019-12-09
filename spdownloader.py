@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup as BS
 # Listing already downloaded
 import os
+import json
 # Progress bar
 from clint.textui import progress
 
@@ -30,10 +31,22 @@ print(f'Total number of link retrieved: {len(episodes)}.')
 print(f'Downloading episodes...')
 download_count = 0
 
-already_downloaded = [x.split('.')[0] for x in os.listdir('.') if '.mp4' in x]
+already_downloaded = {}
+
+try:
+    with open('already_downloaded.json', 'r') as dl_file:
+        already_downloaded = json.load(dl_file)
+        print(f'Found a list of already downloaded episodes ({len(already_downloaded.keys())}).')
+except FileNotFoundError:
+    print('No list of already downloaded episodes found.')
+
 downloading = False
+
 try:
     for episode_page in episodes:
+        if episode_page in already_downloaded.keys():
+            continue
+
         print(f'Querying page {episode_page}...', end=' ')
         page = requests.get(episode_page)
         print(f'Page was returned.')
@@ -49,11 +62,10 @@ try:
         video_url = next((s for s in video_url if 'mp4' in s), None)
         video_url = video_url.replace('\\', '')
 
-        name = soup.find('div', class_='entry-content').find('h2').text
-
-        if name in already_downloaded:
-            print(f'{name} has already been downloaded.')
-            continue
+        try:
+            name = soup.find('div', class_='entry-content').find('h2').text
+        except AttributeError:
+            name = soup.find('div', class_='entry-content').find('h3').text
 
         print(f'Downloading {name}...')
         stream = requests.get(video_url, stream=True)
@@ -68,12 +80,20 @@ try:
         stream.close()
         downloading = False
         download_count += 1
+        already_downloaded[episode_page] = name
 
 except KeyboardInterrupt:
-    stream.close()
-    output_file.close()
+    if stream:
+        stream.close()
+
+    if output_file:
+        output_file.close()
+
     if downloading and os.path.exists(name + '.mp4'):
         os.remove(name + '.mp4')
         print(f"Removed {name + '.mp4'} (interrupted download).")
+
+with open('already_downloaded.json', 'w') as dl_file:
+    json.dump(already_downloaded, dl_file)
 
 print(f'Number of episode fully downloaded: {download_count}.')
