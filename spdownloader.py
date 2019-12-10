@@ -5,6 +5,8 @@ from bs4 import BeautifulSoup as BS
 # Listing already downloaded
 import os
 import json
+# Cleaning name for filename
+import re
 # Progress bar
 from clint.textui import progress
 
@@ -58,18 +60,9 @@ def get_videos():
     print(f'Downloading episodes...')
     download_count = 0
 
-    already_downloaded = {}
-
-    try:
-        with open('already_downloaded.json', 'r') as dl_file:
-            already_downloaded = json.load(dl_file)
-            print(f'Found a list of already downloaded episodes ({len(already_downloaded.keys())}).')
-    except FileNotFoundError:
-        print('No list of already downloaded episodes found.')
+    already_downloaded = retrieve_already_downloaded()
 
     downloading = False
-
-    already_downloaded = retrieve_already_downloaded()
 
     try:
         for episode_page in episodes:
@@ -97,6 +90,8 @@ def get_videos():
                 name = soup.find('div', class_='entry-content').find('h3').text
 
             name = replace_char(name, ILLEGAL_FILENAME_CHAR, '')
+            splitted_url = episode_page.split('-')
+            name = f'{download_count+1} - S{splitted_url[-3]}E{re.sub("[^0-9]", "", splitted_url[-1])} - ' + name
 
             print(f'Downloading {name}...')
             stream = requests.get(video_url, stream=True)
