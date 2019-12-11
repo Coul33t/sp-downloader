@@ -9,8 +9,14 @@ import json
 import re
 # Progress bar
 from clint.textui import progress
+# Exception handling
+import sys
 
 ILLEGAL_FILENAME_CHAR = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+
+def save_downloaded(already_downloaded):
+    with open('already_downloaded.json', 'w') as dl_file:
+        json.dump(already_downloaded, dl_file)
 
 def replace_char(original_str, list_of_char, replacement=''):
     for char in list_of_char:
@@ -48,7 +54,7 @@ def retrieve_already_downloaded():
 
     return already_downloaded
 
-def get_videos():
+def get_videos(start_at):
     url = 'https://www.south-park-tv.biz/'
     print(f'Querying url {url}...', end=' ')
     page = requests.get(url)
@@ -62,16 +68,28 @@ def get_videos():
 
     already_downloaded = retrieve_already_downloaded()
 
+    download_count = len(already_downloaded.keys())
+
     downloading = False
 
     try:
-        for episode_page in episodes:
+        for nb, episode_page in enumerate(episodes):
+            if nb < start_at:
+                continue
+
             if episode_page in already_downloaded.keys():
                 continue
 
-            print(f'Querying page {episode_page}...', end=' ')
-            page = requests.get(episode_page)
-            print(f'Page was returned.')
+            # print(f'Querying page {episode_page}...', end=' ')
+
+            try:
+                page = requests.get(episode_page)
+            except:
+                save_downloaded(already_downloaded)
+                print(f'ERROR: error while accessing {episode_page}. Exiting program.')
+                return
+
+            # print(f'Page was returned.')
 
             soup = BS(page.content, 'html.parser')
             video_div = soup.find('div', {'data-item': True})
@@ -84,16 +102,20 @@ def get_videos():
             video_url = next((s for s in video_url if 'mp4' in s), None)
             video_url = video_url.replace('\\', '')
 
+            name = 'CANTGETNAME'
             try:
                 name = soup.find('div', class_='entry-content').find('h2').text
             except AttributeError:
-                name = soup.find('div', class_='entry-content').find('h3').text
+                try:
+                    name = soup.find('div', class_='entry-content').find('h3').text
+                except AttributeError:
+                    print('WARNING: can\'t retrieve episode name for {episode_page}.')
 
             name = replace_char(name, ILLEGAL_FILENAME_CHAR, '')
             splitted_url = episode_page.split('-')
             name = f'{download_count+1} - S{splitted_url[-3]}E{re.sub("[^0-9]", "", splitted_url[-1])} - ' + name
 
-            print(f'Downloading {name}...')
+            print(f'\nDownloading {name}...')
             stream = requests.get(video_url, stream=True)
             total_length = int(stream.headers.get('content-length'))
             with open(name + '.mp4', 'wb') as output_file:
@@ -108,7 +130,10 @@ def get_videos():
             download_count += 1
             already_downloaded[episode_page] = name
 
-    except KeyboardInterrupt:
+    except:
+        exc_type, _, _ = sys.exc_info()
+        print(f'ERROR: exception of type {exc_type} raised during the execution. Saving already downloaded episodes and exiting program.')
+
         if stream:
             stream.close()
 
@@ -119,10 +144,10 @@ def get_videos():
             os.remove(name + '.mp4')
             print(f"Removed {name + '.mp4'} (interrupted download).")
 
-    with open('already_downloaded.json', 'w') as dl_file:
-        json.dump(already_downloaded, dl_file)
-
+    save_downloaded(already_downloaded)
     print(f'Number of episode fully downloaded: {download_count}.')
 
+
 if __name__ == '__main__':
-    get_videos()
+    start_at = 0
+    get_videos(start_at)
